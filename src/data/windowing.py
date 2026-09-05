@@ -623,7 +623,7 @@ class Normalizer:
         `groups` defaults to ws.vendors for method="rank". Pass an
         explicit array to group by something else (drive model, say).
         """
-        if method not in ("zscore", "rank"):
+        if method not in ("zscore", "rank", "per_drive"):
             raise ValueError(f"method must be zscore|rank, got {method!r}")
 
         flat = ws.X.reshape(-1, ws.X.shape[-1])
@@ -647,6 +647,9 @@ class Normalizer:
                 else:
                     grids[key] = np.quantile(sub, qs, axis=0).T
 
+        # "per_drive" is fitted-state-free: each window is scaled
+        # against its OWN first `baseline_len` timesteps, so no
+        # training statistics are used and no leakage is possible.
         return cls(mean=mean, std=std, features=list(ws.features),
                    method=method, grids=grids, pooled_grid=pooled,
                    n_grid=n_grid)
@@ -661,6 +664,8 @@ class Normalizer:
 
         if self.method == "zscore":
             out = (ws.X - self.mean) / self.std
+        elif self.method == "per_drive":
+            out = self._per_drive_transform(ws)
         else:
             out = self._rank_transform(ws, groups)
 
@@ -676,6 +681,37 @@ class Normalizer:
             stride=ws.stride,
             positive_stride=ws.positive_stride,
         )
+
+    def _per_drive_transform(self, ws, baseline_len: int = 5,
+                             eps: float = 1e-8):
+        """
+        Scale every window against its own opening days.
+
+            z = (x - baseline_median) / (baseline_mad + eps)
+
+        Each window becomes "how far has this drive moved from where it
+        started", which carries no vendor-specific level or scale at
+        all. A drive reporting hours in a different unit, or starting
+        from a different baseline, produces the same representation.
+
+        No fitted statistics, so this cannot leak: the transform of a
+        test window depends only on that window.
+
+        MAD rather than standard deviation because SMART counters are
+        step functions -- flat for long stretches, then a jump -- and
+        the standard deviation of a flat baseline is zero.
+        """
+        k = min(baseline_len, ws.X.shape[1])
+        base = ws.X[:, :k, :]
+        med = np.median(base, axis=1, keepdims=True)
+        mad = np.median(np.abs(base - med), axis=1, keepdims=True)
+        # Where the baseline never moved, fall back to the window's own
+        # spread, then to 1.0, so a constant window maps to zeros rather
+        # than to infinities.
+        spread = ws.X.std(axis=1, keepdims=True)
+        scale = np.where(mad > eps, mad, np.where(spread > eps, spread, 1.0))
+        out = (ws.X - med) / scale
+        return np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
 
     def _rank_transform(self, ws, groups):
         g = groups if groups is not None else ws.vendors
@@ -818,6 +854,77 @@ def flatten(
             ),
             names,
         )
+
+    # ------------------------------------------------------------
+    # DYNAMICS
+    #
+    # Every experiment before this used how="last", i.e. the final
+    # timestep's raw LEVEL. Levels are vendor-specific: different
+    # scales, different baselines, and at least one attribute whose
+    # correlation with failure reverses sign between vendors. A Random
+    # Forest fitted on levels learns vendor-specific split points, which
+    # is why it reached AUC 0.73 within-fleet and 0.42-0.65 across
+    # manufacturers.
+    #
+    # Dynamics describe how a drive is CHANGING. A drive whose
+    # reallocated-sector count is climbing is deteriorating whatever
+    # units its vendor reports in and whatever its baseline was. The
+    # level is a vendor convention; the trend is closer to physics.
+    #
+    # Per feature:
+    #   slope      OLS slope over the window, in units per day
+    #   delta      last - first
+    #   rel_delta  delta / (|first| + 1), scale-free
+    #   std        volatility within the window
+    #   max_jump   largest single-step absolute change
+    #   n_changes  fraction of steps where the value moved at all
+    #              (SMART counters are step functions; how often a
+    #              counter ticks is itself informative and completely
+    #              scale-free)
+    #   last       retained so dynamics strictly extends "last"
+    # ------------------------------------------------------------
+
+    if how == "dynamics":
+
+        t = np.arange(w, dtype=np.float64)
+        t_c = t - t.mean()
+        denom = float((t_c ** 2).sum()) or 1.0
+
+        # (n, w, f) -> slope per (sample, feature)
+        slope = np.tensordot(ws.X - ws.X.mean(axis=1, keepdims=True),
+                             t_c, axes=([1], [0])) / denom
+
+        first = ws.X[:, 0, :]
+        last = ws.X[:, -1, :]
+        delta = last - first
+        rel_delta = delta / (np.abs(first) + 1.0)
+
+        step = np.diff(ws.X, axis=1)
+        max_jump = np.abs(step).max(axis=1) if w > 1 else np.zeros_like(last)
+        n_changes = ((np.abs(step) > 1e-9).mean(axis=1) if w > 1
+                     else np.zeros_like(last))
+
+        parts = [slope, delta, rel_delta, ws.X.std(1),
+                 max_jump, n_changes, last]
+        labels = ("slope", "delta", "rel_delta", "std",
+                  "max_jump", "n_changes", "last")
+
+        names = [f"{c}_{lab}" for lab in labels for c in ws.features]
+        out = np.concatenate(parts, axis=1)
+        return np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0), names
+
+    # ------------------------------------------------------------
+    # DYNAMICS ONLY -- no level at all
+    #
+    # The strict test of the level hypothesis. If cross-vendor AUC
+    # holds up without any raw level, the transferable signal is
+    # entirely in the trajectory.
+    # ------------------------------------------------------------
+
+    if how == "dynamics_only":
+        X, names = flatten(ws, "dynamics")
+        keep = [i for i, n in enumerate(names) if not n.endswith("_last")]
+        return X[:, keep], [names[i] for i in keep]
 
     raise ValueError(
         f"unknown how={how!r}"
