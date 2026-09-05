@@ -1,0 +1,34 @@
+================================================================
+SLIM EXPORT
+================================================================
+source      : C:\Users\vivek\Downloads\SSD-Failure-Prediction\data\processed\alibaba_ssd_processed.parquet
+destination : C:\Users\vivek\Downloads\SSD-Failure-Prediction\data\processed\alibaba_ssd_slim
+compression : zstd
+
+columns in  : 108
+columns out : 20  (4 metadata + 16 SMART)
+common IDs  : [5, 9, 12, 183, 184, 187, 197, 199]
+
+source size : 9.78 GB
+drive models: ['MA1', 'MA2', 'MB1', 'MB2', 'MC1', 'MC2']
+
+  MA1:    20,625,668 rows   39,962 drives   1,370 failed    20.22 MB  (9s)
+  MA2:    69,398,968 rows  118,417 drives     883 failed    70.24 MB  (58s)
+  MB1:    26,261,218 rows   44,401 drives   1,807 failed    15.32 MB  (13s)
+  MB2:    31,008,712 rows   48,811 drives     604 failed    23.63 MB  (11s)
+  MC1:   115,274,126 rows  199,662 drives  10,510 failed    63.80 MB  (97s)
+  MC2:    10,543,592 rows   23,803 drives   1,131 failed     9.61 MB  (6s)
+
+rows written: 273,112,284
+output size : 202.81 MB
+reduction   : 49.4x
+elapsed     : 194s
+
+per model
+  model            rows    drives   failed        size
+  MA1        20,625,668    39,962    1,370    20.22 MB
+  MA2        69,398,968   118,417      883    70.24 MB
+  MB1        26,261,218    44,401    1,807    15.32 MB
+  MB2        31,008,712    48,811      604    23.63 MB
+  MC1       115,274,126   199,662   10,510    63.80 MB
+  MC2        10,543,592    23,803    1,131     9.61 MB

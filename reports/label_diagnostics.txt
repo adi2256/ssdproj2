@@ -1,0 +1,83 @@
+================================================================
+LABEL DIAGNOSTICS
+parquet : C:\Users\vivek\Downloads\SSD-Failure-Prediction\data\processed\alibaba_ssd_processed.parquet
+horizon : 30 days
+================================================================
+
+[1] days_to_failure boundary
+  rows at dtf == 0 : 0
+  rows at dtf <  0 : 1,264,870   (post-failure)
+  rows at dtf >  0 : 6,316,925
+  rows null (healthy drives) : 265,530,489
+  range            : [-724.8747800925926, 729.915]
+  -> no drive reports on its failure date; `0 < dtf <= h` and `0 <= dtf <= h` are equivalent here
+
+[2] post-failure rows per failed drive
+  drives with post-failure telemetry: 7,260
+  rows per drive
+    count      7260.0
+    null_count 0.0
+    mean       174.22451790633608
+    std        176.0427380027386
+    min        1.0
+    25%        20.0
+    50%        111.0
+    75%        307.0
+    max        698.0
+  drives reporting >90 days after failure: 3,855
+  drives reporting >180 days after failure: 2,960
+
+[3] horizon coverage per failed drive (0 < dtf <= 30)
+  failed drives total          : 16,305
+  with >=1 horizon row         : 16,085
+  with a FULL 30-row horizon   : 3,066
+  with 0 horizon rows          : 220
+  horizon rows per drive
+    count      16085.0
+    null_count 0.0
+    mean       26.60211377059372
+    std        5.80681241204646
+    min        1.0
+    25%        27.0
+    50%        29.0
+    75%        29.0
+    max        30.0
+
+[3b] total history per failed drive (window_len=30)
+  rows per failed drive
+    count      16305.0
+    null_count 0.0
+    mean       464.99816007359703
+    std        192.78009393812698
+    min        1.0
+    25%        333.0
+    50%        517.0
+    75%        620.0
+    max        715.0
+  drives with < 60 rows (horizon + window): 548
+
+[4] censoring depth
+  global last date: 2019-12-31 00:00:00
+  censored drives (healthy, ended early): 120,531
+  days before global end
+    count      120531.0
+    null_count 0.0
+    mean       165.08855813027353
+    std        173.0830151919427
+    min        1.0
+    25%        36.0
+    50%        82.0
+    75%        273.0
+    max        729.0
+  censored by >  7 days: 114,517
+  censored by > 30 days: 91,345
+  censored by > 90 days: 59,453
+  censored by >180 days: 48,611
+  censored by >365 days: 16,477
+
+[5] projected label counts under `0 < dtf <= h`, post-failure rows dropped
+  vendor   rows            positives     rate
+  A            89,621,266       49,169   0.0549%
+  B            56,985,104       64,795   0.1137%
+  C           125,241,044      313,931   0.2507%
+  -> row-level positive rate; drive-level rates are in reports/vendor_profile.csv

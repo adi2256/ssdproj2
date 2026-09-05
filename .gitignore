@@ -1,0 +1,20 @@
+# Data — never committed. The slim export lives on Kaggle / Drive.
+data/
+*.parquet
+
+# Experiment output — regenerate from src/, commit only results.csv
+results/
+!results/results.csv
+!results/run_config.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+venv/
+
+# OS
+.DS_Store

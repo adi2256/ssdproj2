@@ -1,0 +1,4 @@
+Raw CSV rows       : 273,112,284
+Parquet rows       : 273,112,284
+Difference         : +0
+Duplicate fail keys: 0

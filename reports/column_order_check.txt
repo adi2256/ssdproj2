@@ -1,0 +1,5 @@
+Files checked : 716
+Reference     : 20180101.csv
+Column count  : 105
+
+OK: identical column order in every file.

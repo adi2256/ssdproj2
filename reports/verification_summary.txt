@@ -1,0 +1,19 @@
+[1] Column order: OK across 716 files (105 columns)
+[3] Drive models present: ['MA1', 'MA2', 'MB1', 'MB2', 'MC1', 'MC2']
+    Total rows                 : 273,112,284
+    Rows after recorded failure: 1,264,870
+    failure_event == 1         : 1,264,870 (a 'has failed' flag, NOT the 30-day target)
+    Global last date           : 2019-12-31 00:00:00
+    Drives ending early        : 133,804 (right-censored, not confirmed healthy)
+    disk_id under >1 model     : 119,213 (key MUST be (model, disk_id))
+[2] Rows raw=273,112,284 parquet=273,112,284 delta=+0 | dup failure keys=0
+
+[VENDOR A] drives=158,379 failures=2,253 -> OK
+[VENDOR B] drives=93,212 failures=2,411 -> OK
+[VENDOR C] drives=223,465 failures=11,641 -> OK
+
+[ATTRS] 102 SMART columns; populated >50% of rows:
+    vendor A: 40
+    vendor B: 36
+    vendor C: 42
+    -> divergence here IS the covariate shift evidence
