@@ -1,5 +1,5 @@
 # Data — never committed. The slim export lives on Kaggle / Drive.
-data/
+/data/
 *.parquet
 
 # Experiment output — regenerate from src/, commit only results.csv
