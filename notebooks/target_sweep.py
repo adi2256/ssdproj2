@@ -121,10 +121,32 @@ def attach_dtf(ws, labelled: pl.DataFrame) -> np.ndarray:
         "ds": list(ws.end_ds),
         "_row": np.arange(len(ws)),
     })
+
+    # The real parquet stores `ds` as Datetime while end_ds is a Python
+    # date, which polars reads as Date. Joining across those dtypes
+    # raises SchemaError, so both sides are cast to Date. disk_id is
+    # cast for the same reason -- the fixture uses Int64, the parquet
+    # may not.
+    right = labelled.select(["model", "disk_id", "ds", "days_to_failure"])
+    keys = keys.with_columns(
+        pl.col("ds").cast(pl.Date),
+        pl.col("disk_id").cast(pl.Int64),
+    )
+    right = right.with_columns(
+        pl.col("ds").cast(pl.Date),
+        pl.col("disk_id").cast(pl.Int64),
+    )
+
     joined = keys.join(
-        labelled.select(["model", "disk_id", "ds", "days_to_failure"]),
-        on=["model", "disk_id", "ds"], how="left",
+        right, on=["model", "disk_id", "ds"], how="left",
     ).sort("_row")
+
+    matched = joined["days_to_failure"].is_not_null().sum()
+    if matched == 0:
+        raise RuntimeError(
+            "days_to_failure joined onto zero windows. Check that "
+            "`labelled` is the same frame the windows came from."
+        )
     dtf = joined["days_to_failure"].to_numpy().astype(np.float64)
     return np.where(np.isfinite(dtf), dtf, np.inf)
 
