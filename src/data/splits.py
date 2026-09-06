@@ -185,6 +185,109 @@ def make_lomo_split(
     return split
 
 
+def make_lomm_split(
+    labelled: pl.DataFrame,
+    held_out_model: str,
+    cal_frac: float | None = None,
+    seed: int | None = None,
+    same_vendor_only: bool = False,
+) -> Split:
+    """
+    Leave-one-drive-MODEL-out. Hold out one drive model entirely;
+    train and calibrate on the others.
+
+    WHY THIS AXIS
+
+    Leave-one-VENDOR-out breaks on three separate mechanisms at once:
+    vendor A's raw levels sit outside the training range, vendor C's
+    counters use a different scale, and two of vendor B's attributes
+    correlate with failure in the opposite direction. No single feature
+    representation repairs all three -- the best mean AUC across nine
+    representation/normaliser combinations was 0.573.
+
+    Within a vendor those conventions are shared, so a model-level
+    hold-out isolates genuine hardware difference from encoding
+    difference. It is also the more deployment-realistic event: data
+    centres onboard new drive models constantly and new vendors rarely.
+
+    Six models give six folds rather than three, and the two models of
+    a vendor differ sharply in failure rate (MA1 3.43% vs MA2 0.75%),
+    so real label shift is still present.
+
+    `same_vendor_only` restricts training to the held-out model's OWN
+    vendor. That is the strictest test of the encoding hypothesis: if
+    MA1 -> MA2 transfers well while A -> (B,C) does not, encoding is
+    the obstacle rather than absent signal.
+    """
+    cal_frac = cal_frac if cal_frac is not None else CFG.cal_frac
+    seed = seed if seed is not None else CFG.seed
+
+    drives = drive_table(labelled)
+    present = set(drives["model"].unique())
+    if held_out_model not in present:
+        raise ValueError(
+            f"model {held_out_model!r} not in data; found {sorted(present)}"
+        )
+
+    test = drives.filter(pl.col("model") == held_out_model)
+    pool = drives.filter(pl.col("model") != held_out_model)
+
+    if same_vendor_only:
+        vendor = held_out_model[1]
+        pool = pool.filter(pl.col(VENDOR_COL) == vendor)
+
+    if pool.height == 0:
+        raise ValueError(
+            f"no training drives left after holding out {held_out_model!r}"
+            + (" within its own vendor" if same_vendor_only else "")
+        )
+
+    # Stratify by drive_label only: stratifying by model as well would
+    # be degenerate when the pool is a single model.
+    assigned = _stratified_assign(
+        pool, {"cal": cal_frac, "train": 1 - cal_frac},
+        strata=["drive_label"], seed=seed,
+    )
+
+    split = Split(
+        name=f"lomm_{held_out_model}",
+        train=assigned.filter(pl.col("_part") == "train").drop("_part"),
+        cal=assigned.filter(pl.col("_part") == "cal").drop("_part"),
+        test=test,
+        held_out_vendor=None,      # the vendor invariant does not apply
+    )
+
+    # validate_split's vendor check is vendor-specific, so assert the
+    # model-level equivalent here: no drive of the held-out model may
+    # appear in train or cal.
+    for part in ("train", "cal"):
+        models = set(getattr(split, part)["model"].unique())
+        if held_out_model in models:
+            raise AssertionError(
+                f"{split.name}: held-out model {held_out_model!r} present "
+                f"in {part}"
+            )
+    if set(split.test["model"].unique()) != {held_out_model}:
+        raise AssertionError(
+            f"{split.name}: test must contain only {held_out_model!r}"
+        )
+
+    validate_split(split)
+    return split
+
+
+def make_all_lomm_splits(
+    labelled: pl.DataFrame,
+    models: list[str] | None = None,
+    **kwargs,
+) -> dict[str, Split]:
+    """One leave-one-model-out split per drive model present."""
+    drives = drive_table(labelled)
+    present = sorted(set(drives["model"].unique()))
+    models = models if models is not None else present
+    return {m: make_lomm_split(labelled, m, **kwargs) for m in models}
+
+
 def make_all_lomo_splits(
     labelled: pl.DataFrame,
     vendors: list[str] | None = None,
