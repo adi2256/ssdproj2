@@ -61,6 +61,9 @@ import numpy as np
 import polars as pl
 
 from notebooks.paper_results import METHODS, _fit_conformal, build
+from notebooks.within_vendor_wear import age_overlap, build_vendor
+from src.conformal.mondrian import MondrianConformal
+from src.conformal.split import SplitConformal
 from src.data.labels import build_labels
 
 MAIN_ALPHA = 0.10
@@ -175,6 +178,115 @@ def run_ratio(tag: str, load_slim, alpha: float = MAIN_ALPHA) -> dict:
     return meta
 
 
+# ---------------------------------------------------------------
+# Within-vendor dump (Table III)
+# ---------------------------------------------------------------
+
+def run_within_vendor(load_slim, n_drives: int = 60_000,
+                      alpha: float = MAIN_ALPHA, seed: int = SEED) -> dict:
+    """
+    Per-vendor predictions, dumped the same way as the pooled run.
+
+    Table III is the only results table not derivable from the pooled
+    dump, because each vendor is trained, calibrated and tested on its
+    own drives with stages fit on its own age range. Running it here,
+    from the same labelled frame and the same code state as the pooled
+    run, is what lets every table in the paper come from one state
+    rather than from whichever script happened to produce it.
+
+    It also puts the within-vendor failure-class coverages -- the
+    0.17-0.69 range the paper leans on -- within reach of the same
+    drive-clustered bootstrap as everything else. Those cells carry
+    23-961 failures, so they are the ones most in need of an interval
+    and currently have none.
+
+    Writes, per vendor V: preds_wv{V}_{cal,test}.parquet and
+    meta_wv.json; plus age_overlap.csv for the overlap figure.
+    """
+    print("=" * 64)
+    print(f"WITHIN-VENDOR at {n_drives:,} drives (the paper's ratio)")
+    print("=" * 64)
+
+    t0 = time.time()
+    raw = load_slim(n_drives=n_drives, keep_all_failed=True, seed=seed)
+    labelled, stats = build_labels(raw)
+    print(stats)
+    del raw
+    gc.collect()
+
+    overlap = age_overlap(labelled, seed=seed)
+    for path in (f"{OUT}/age_overlap.csv", "age_overlap.csv"):
+        try:
+            overlap.write_csv(path)
+            break
+        except (FileNotFoundError, OSError):
+            continue
+
+    meta = {"n_drives": n_drives, "seed": seed, "alpha": alpha, "vendors": {}}
+
+    for v in ("A", "B", "C"):
+        print("\n" + "=" * 64)
+        print(f"VENDOR {v}")
+        print("=" * 64)
+        tv = time.time()
+        c = build_vendor(labelled, v, n_stages=5, seed=seed)
+        if c is None:
+            print(f"  vendor {v} skipped")
+            continue
+
+        g_cal, g_te = c["stage"]["cal"], c["stage"]["test"]
+        print(f"  train {len(c['raw']['train']):,} "
+              f"cal {len(c['raw']['cal']):,} test {len(c['raw']['test']):,} "
+              f"| AUC {c['auc']:.4f} ({time.time() - tv:.0f}s)")
+
+        cal = pl.DataFrame({
+            "drive_idx": np.asarray(c["raw"]["cal"].drive_idx, dtype=np.int64),
+            "stage": np.asarray(g_cal, dtype=np.int16),
+            "y": np.asarray(c["y_cal"], dtype=np.int8),
+            "p": np.asarray(c["p_cal"], dtype=np.float64),
+        })
+        test = pl.DataFrame({
+            "drive_idx": np.asarray(c["drive_te"], dtype=np.int64),
+            "stage": np.asarray(g_te, dtype=np.int16),
+            "y": np.asarray(c["y_te"], dtype=np.int8),
+            "p": np.asarray(c["p_te"], dtype=np.float64),
+        })
+
+        sp = (SplitConformal(alpha=alpha, seed=seed)
+              .fit(c["p_cal"], c["y_cal"]).predict(c["p_te"]))
+        mb = (MondrianConformal(alpha=alpha, by="both", seed=seed)
+              .fit(c["p_cal"], c["y_cal"], groups=g_cal)
+              .predict(c["p_te"], groups=g_te))
+        for name, r in (("split", sp), ("mondrian_both", mb)):
+            test = test.with_columns([
+                pl.Series(f"set_h_{name}", r.sets[:, 0].astype(bool)),
+                pl.Series(f"set_f_{name}", r.sets[:, 1].astype(bool)),
+            ])
+
+        cal.write_parquet(f"{OUT}/preds_wv{v}_cal.parquet")
+        test.write_parquet(f"{OUT}/preds_wv{v}_test.parquet")
+
+        meta["vendors"][v] = {
+            "auc": float(c["auc"]),
+            "stage_edges": [float(e) for e in c["smap"].edges],
+            "n_windows_train": int(len(c["raw"]["train"])),
+            "n_windows_cal": int(len(c["y_cal"])),
+            "n_windows_test": int(len(c["y_te"])),
+            "n_fail_windows_test": int(c["y_te"].sum()),
+        }
+        print(f"  wrote preds_wv{v}_{{cal,test}}.parquet "
+              f"({test.height:,} test rows)")
+        del c
+        gc.collect()
+
+    with open(f"{OUT}/meta_wv.json", "w") as fh:
+        json.dump(meta, fh, indent=2)
+    print("\n  " + json.dumps(meta))
+    print(f"\n[within-vendor done in {time.time() - t0:.0f}s]")
+    return meta
+
+
 if __name__ == "__main__":
-    # In the notebook: run_ratio("r2p7", ctx_setup.load_slim)
-    raise SystemExit("import and call run_ratio(tag, load_slim) instead")
+    # In the notebook: run_ratio("r2p7", C.load_slim)
+    #                  run_within_vendor(C.load_slim)
+    raise SystemExit("import and call run_ratio / run_within_vendor instead")
