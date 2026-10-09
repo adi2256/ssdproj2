@@ -239,23 +239,32 @@ def tab_cells(R, N):
 
 
 def tab_composition(R, N):
-    """Table V: prediction-set composition."""
+    """Table VI: prediction-set composition, singletons split by label."""
+    te = R.pq(f"preds_{MAIN}_test")
     want = [("split", s) for s in range(5)] + [
-        ("mondrian_class", 4), ("mondrian_stage", 4),
+        ("mondrian_class", 0), ("mondrian_class", 4),
+        ("mondrian_stage", 0), ("mondrian_stage", 4),
         ("mondrian_both", 0), ("mondrian_both", 4)]
     rows, last = [], None
     for m, s in want:
-        g = lambda st: R.b(method=m, grouping="stage", group=s, stat=st)  # noqa
-        sing, doub, emp, size = (g("singleton")["point"],
-                                 g("doubleton")["point"],
-                                 g("empty")["point"], g("set_size")["point"])
+        t = te.filter(pl.col("stage") == s)
+        h = t[f"set_h_{m}"].to_numpy()
+        f = t[f"set_f_{m}"].to_numpy()
+        sh, sf = (h & ~f).mean(), (f & ~h).mean()
+        doub, emp = (h & f).mean(), (~h & ~f).mean()
+        size = h.mean() + f.mean()
+        # must agree with the bootstrap point estimates
+        assert abs(size - R.b(method=m, grouping="stage", group=s,
+                              stat="set_size")["point"]) < 1e-9
         lab = METHOD_LABEL[m] if m != last else ""
         if m != last and last is not None:
             rows.append("\\addlinespace[1.5pt]")
         last = m
-        rows.append(f"{lab} & {s} & {100*sing:.1f} & {100*doub:.1f} & "
-                    f"{100*emp:.1f} & {size:.3f} \\\\")
-        N[f"comp_{m}_s{s}_sing"] = f"{100*sing:.1f}"
+        rows.append(f"{lab} & {s} & {100*sh:.1f} & {100*sf:.1f} & "
+                    f"{100*doub:.1f} & {100*emp:.1f} & {size:.3f} \\\\")
+        N[f"comp_{m}_s{s}_sing"] = f"{100*(sh+sf):.1f}"
+        N[f"comp_{m}_s{s}_singh"] = f"{100*sh:.1f}"
+        N[f"comp_{m}_s{s}_singf"] = f"{100*sf:.1f}"
         N[f"comp_{m}_s{s}_doub"] = f"{100*doub:.1f}"
         N[f"comp_{m}_s{s}_empty"] = f"{100*emp:.1f}"
         N[f"comp_{m}_s{s}_size"] = f"{size:.3f}"
