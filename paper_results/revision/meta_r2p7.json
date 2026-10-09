@@ -1,0 +1,21 @@
+{
+  "tag": "r2p7",
+  "n_drives": 60000,
+  "n_failed_drives": 16305,
+  "n_healthy_drives": 43695,
+  "healthy_to_failed": 2.68,
+  "seed": 42,
+  "alpha": 0.1,
+  "n_windows_train": 200000,
+  "n_windows_cal": 155403,
+  "n_windows_test": 193148,
+  "n_fail_windows_test": 2857,
+  "test_prevalence": 0.014791765899724564,
+  "auc": 0.7038346664851517,
+  "methods": [
+    "split",
+    "mondrian_class",
+    "mondrian_stage",
+    "mondrian_both"
+  ]
+}

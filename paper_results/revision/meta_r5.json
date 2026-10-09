@@ -1,0 +1,21 @@
+{
+  "tag": "r5",
+  "n_drives": 97830,
+  "n_failed_drives": 16305,
+  "n_healthy_drives": 81525,
+  "healthy_to_failed": 5.0,
+  "seed": 42,
+  "alpha": 0.1,
+  "n_windows_train": 200000,
+  "n_windows_cal": 261933,
+  "n_windows_test": 326953,
+  "n_fail_windows_test": 2875,
+  "test_prevalence": 0.008793312800310748,
+  "auc": 0.7131803084442634,
+  "methods": [
+    "split",
+    "mondrian_class",
+    "mondrian_stage",
+    "mondrian_both"
+  ]
+}

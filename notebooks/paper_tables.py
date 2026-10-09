@@ -553,9 +553,7 @@ def fig_age(R, N, out, edges):
         v = r["vendor"]
         for k in ("p05", "p25", "median", "p75", "p95"):
             N[f"age_{v}_{k}"] = f"{int(r[k]):,}".replace(",", "{,}")
-    if not edges:
-        print("  (no --edges: age-overlap figure not regenerated)")
-        return
+    edges = edges or []
     fig, ax = plt.subplots(figsize=(3.4, 1.35))
     for i, v in enumerate(("C", "B", "A")):
         r = R.get(ov, vendor=v)
@@ -565,8 +563,14 @@ def fig_age(R, N, out, edges):
         ax.plot([r["median"]] * 2, [i - 0.22, i + 0.22], color="k", lw=1)
     for e in edges:
         ax.axvline(e, color="k", ls=":", lw=0.7)
-    ax.text(edges[-1], 2.45, "fleet-wide stage-4 edge", fontsize=5,
-            color="grey", ha="left")
+    if edges:
+        ax.text(edges[-1], 2.45, "fleet-wide stage-4 edge", fontsize=5,
+                color="grey", ha="left")
+    else:   # no fleet edges: mark the separation the text cites instead
+        a05 = R.get(ov, vendor="A")["p05"]
+        ax.axvline(a05, color="k", ls=":", lw=0.7)
+        ax.text(a05, 2.45, " vendor A 5th pct.", fontsize=5, color="grey",
+                ha="left")
     ax.set_yticks(range(3))
     ax.set_yticklabels(["vendor C", "vendor B", "vendor A"], fontsize=6)
     ax.set_ylim(-0.5, 2.7)
