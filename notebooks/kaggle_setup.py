@@ -149,6 +149,11 @@ def make_loader(slim_glob: str) -> Callable:
               .group_by(["model", "disk_id"])
               .agg(pl.col("failure_time").max().is_not_null().alias("failed"))
         )
+        # group_by returns drives in an arbitrary, run-dependent order, and
+        # DataFrame.sample picks by position. Without this sort the same
+        # seed selects a different healthy subset in every session -- the
+        # cause of AUC moving 0.698-0.705 between "identical" runs.
+        drives = drives.sort(["model", "disk_id"])
         fail = drives.filter(pl.col("failed"))
         heal = drives.filter(~pl.col("failed"))
 
@@ -166,7 +171,13 @@ def make_loader(slim_glob: str) -> Callable:
                 heal.sample(n=n_drives - n_f, seed=seed),
             ])
 
-        print(f"kept {keep.height:,} drives ({n_f:,} failed)")
+        import hashlib
+        fp = hashlib.sha1(
+            "|".join(sorted(f"{m}:{d}" for m, d in
+                            keep.select(["model", "disk_id"]).iter_rows()))
+            .encode()).hexdigest()[:12]
+        print(f"kept {keep.height:,} drives ({n_f:,} failed)  "
+              f"drive-set fingerprint {fp}")
         return collect(
             lf.join(keep.select(["model", "disk_id"]).lazy(),
                     on=["model", "disk_id"], how="inner")
