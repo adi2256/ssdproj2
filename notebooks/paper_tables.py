@@ -273,12 +273,14 @@ def tab_platt(R, N):
         return R.get(d, rule=rule, scorer=scorer, stage=str(stage))
 
     rows = []
-    order = [("raw", "Raw RF score"), ("platt", "Platt"),
+    order = [("raw", "Raw RF"), ("platt", "Platt"),
              ("isotonic", "Isotonic")]
     for sc, lab in order:
         qq = R.get(q, scorer=sc, stage="all")
         N[f"pl_{sc}_brier"] = f"{qq['brier']:.4f}"
         N[f"pl_{sc}_ece"] = f"{qq['ece']:.4f}"
+        N[f"pl_{sc}_ece_s"] = (f"{qq['ece']:.2f}" if qq["ece"] >= 0.1
+                               else f"{qq['ece']:.3f}")
         N[f"pl_{sc}_meanpred"] = f"{qq['mean_pred']:.3f}"
         for rule, rl in (("A_matched_budget", "A"),
                          ("B_cal_90pct_recall", "B")):
@@ -286,7 +288,7 @@ def tab_platt(R, N):
             r4 = rec(rule, sc, 4)
             cells = [f"{rec(rule, sc, s)['fail_recall']:.3f}" for s in range(5)]
             rows.append(
-                f"{lab} & {rl} & {qq['brier']:.4f} & {qq['ece']:.4f} & "
+                f"{lab if rl == 'A' else ''} & {rl} & {qq['ece']:.4f} & "
                 f"{a['alert_rate']:.3f} & {a['fail_recall']:.3f} & "
                 + " & ".join(cells) + " \\\\")
             N[f"pl_{sc}_{rl}_alert"] = f"{a['alert_rate']:.3f}"
@@ -299,10 +301,12 @@ def tab_platt(R, N):
         a = rec("conformal_set_contains_failure", m, "all")
         cells = [f"{rec('conformal_set_contains_failure', m, s)['fail_recall']:.3f}"
                  for s in range(5)]
-        rows.append(f"{METHOD_LABEL[m]} & --- & --- & --- & "
+        rows.append(f"{METHOD_LABEL[m]} & --- & --- & "
                     f"{a['alert_rate']:.3f} & {a['fail_recall']:.3f} & "
                     + " & ".join(cells) + " \\\\")
         N[f"cp_{m}_alert"] = f"{a['alert_rate']:.3f}"
+    N["pl_max_s4"] = max((N[f"pl_{sc}_{rl}_s4"] for sc in ("platt", "isotonic")
+                          for rl in ("A", "B")), key=float)
     # per-stage calibration-in-the-large after Platt
     for s in range(5):
         r = R.get(q, scorer="platt", stage=str(s))
@@ -446,6 +450,9 @@ def alpha_sweep(R, N, out):
     young = [g for s in range(4) for g in gaps[s]]
     N["sweep_young_absmax"] = f"{max(abs(g) for g in young):.2f}"
     N["sweep_young_marg_absmax"] = f"{max(abs(g) for g in marg):.2f}"
+    N["sweep_young_marg_min"] = f"{min(marg):+.3f}"   # most under target
+    N["sweep_young_marg_max"] = f"{max(marg):+.3f}"
+    N["sweep_young_marg_under"] = f"{max(0.0, -min(marg)):.3f}"
     # match the existing figure's look
     fig, ax = plt.subplots(figsize=(3.4, 2.1))
     cols = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
@@ -522,8 +529,9 @@ def fig_within(R, out):
                         lw=0.8, color=cols[v],
                         mfc=cols[v] if k else "white")
     ax.axhline(0.9, color="k", ls="--", lw=0.8)
-    ax.text(-0.15, 0.92, r"target $1-\alpha=0.90$", fontsize=5.5)
-    ax.set_ylim(0, 1.0)
+    ax.text(-0.15, 0.85, r"target $1-\alpha=0.90$", fontsize=5.5)
+    ax.set_ylim(0, 1.18)
+    ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
     ax.set_xticks(range(5))
     ax.set_xlabel("vendor-relative wear quintile", fontsize=7)
     ax.set_ylabel("failure-class coverage", fontsize=7)
@@ -619,6 +627,61 @@ def main(res_dir, out, edges=None):
               "wv_marg_max": f"{max(wv_marg):.2f}",
               "wv_mb_min": f"{min(wv_mb):.2f}",
               "wv_mb_max": f"{max(wv_mb):.2f}"})
+    # ranges quoted in the text
+    young = range(4)
+    for k in ("splitfail", "splitsize", "bothsize", "classfail"):
+        vals = [float(N[f"{k}_s{s}"]) for s in young]
+        N[f"young_{k}_min"] = f"{min(vals):.3f}"
+        N[f"young_{k}_max"] = f"{max(vals):.3f}"
+    cov = [float(N[f"splitcov_s{s}"]) for s in range(5)]
+    N["splitcov_min"], N["splitcov_max"] = f"{min(cov):.3f}", f"{max(cov):.3f}"
+    st4 = R.b(method="mondrian_stage", grouping="stage", group=4,
+              stat="cov_failure")
+    N["stagefail_s4"] = f3(st4["point"])
+    N["both_s4_pctmax"] = f"{100 * float(N['bothsize_s4']) / 2:.0f}"
+    relA = [float(N[f"wv_A{s}_fail"]) for s in range(5)
+            if int(N[f"wv_A{s}_n"]) >= MIN_FAIL]
+    N["wv_A_young"] = str(min(s for s in range(5)
+                              if int(N[f"wv_A{s}_n"]) >= MIN_FAIL))
+    for k in ("fail", "lo", "hi", "n"):
+        N[f"wv_Ay_{k}"] = N[f"wv_A{N['wv_A_young']}_{k}"]
+    N["wv_A_rel_min"], N["wv_A_rel_max"] = f"{min(relA):.2f}", f"{max(relA):.2f}"
+    sizes = []
+    for v in "ABC":
+        sub = R.wv.filter(pl.col("vendor") == v)
+        for s in range(5):
+            sizes.append(R.get(sub, method="mondrian_both", grouping="stage",
+                               group=str(s), stat="set_size")["point"])
+        mv = R.meta_wv["vendors"][v]
+        N[f"wv_{v}_ntrain"] = _n(mv["n_windows_train"])
+        N[f"wv_{v}_ncal"] = _n(mv["n_windows_cal"])
+        N[f"wv_{v}_ntest"] = _n(mv["n_windows_test"])
+    N["wv_mbsize_min"], N["wv_mbsize_max"] = f"{min(sizes):.2f}", f"{max(sizes):.2f}"
+
+    # direction claims the text makes -- checked, not assumed
+    def sep(v, a, b):
+        """interval of quintile a entirely below interval of quintile b"""
+        return float(N[f"wv_{v}{a}_hi"]) < float(N[f"wv_{v}{b}_lo"])
+    checks = {
+        # youngest quintile with >= MIN_FAIL failures vs the oldest
+        "A_old_above_young": sep("A", min(s for s in range(5)
+                                          if int(N[f"wv_A{s}_n"]) >= MIN_FAIL), 4),
+        "B_old_below_young": sep("B", 4, 0),
+        "C_old_below_young": sep("C", 4, 0),
+        "wv_no_cell_reaches_target": float(N["wv_hi_max"]) < 0.90,
+        "marginal_within_0.09_everywhere": max(
+            [abs(float(N[f"wv_{v}{s}_marg"]) - 0.9) for v in "ABC" for s in range(5)]
+            + [abs(R.b(tag=t, method="split", grouping="stage", group=s,
+                       stat="coverage")["point"] - 0.9)
+               for t in ("r1", "r2p7", "r5") for s in range(5)]) <= 0.09,
+        "every_stage_marginal_ci_reaches_target": all(
+            float(N[f"splitcov_s{s}_hi"]) >= 0.9 for s in range(5)),
+        "both_s4_ci_covers_target": float(N["bothfail_s4_lo"]) <= 0.90
+                                     <= float(N["bothfail_s4_hi"]),
+    }
+    N["checks"] = json.dumps(checks)
+    print("claim checks:", checks)
+
     # binomial-vs-bootstrap width on the key cell
     f4 = R.b(method="split", grouping="stage", group=4, stat="cov_failure")
     p, n = f4["point"], f4["n_fail_windows"]
@@ -628,9 +691,15 @@ def main(res_dir, out, edges=None):
     N["s4_width_ratio"] = f"{(f4['hi'] - f4['lo']) / 2 / binom:.1f}"
 
     with open(f"{out}/numbers.tex", "w") as fh:
-        fh.write("% generated by notebooks/paper_tables.py -- do not edit\n")
+        fh.write("% generated by notebooks/paper_tables.py -- do not edit\n"
+                 "% use as \\R{key}; an unknown key is a hard error\n"
+                 "\\providecommand{\\R}[1]{\\ifcsname R:#1\\endcsname"
+                 "\\csname R:#1\\endcsname\\else"
+                 "\\errmessage{unknown result key #1}\\fi}\n")
         for k in sorted(N):
-            fh.write(f"\\newcommand{{\\{macro_name(k)}}}{{{N[k]}}}\n")
+            if k == "checks":
+                continue
+            fh.write(f"\\expandafter\\def\\csname R:{k}\\endcsname{{{N[k]}}}\n")
     with open(f"{out}/numbers.json", "w") as fh:
         json.dump(N, fh, indent=1, sort_keys=True)
     names = [macro_name(k) for k in N]
