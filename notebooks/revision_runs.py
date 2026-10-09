@@ -134,6 +134,7 @@ def dump(ctx, tag: str, n_drives: int, alpha: float = MAIN_ALPHA) -> dict:
         "n_fail_windows_test": int(ctx["y_te"].sum()),
         "test_prevalence": float(ctx["y_te"].mean()),
         "auc": float(ctx["auc"]),
+        "stage_edges": [float(e) for e in getattr(ctx.get("smap"), "edges", [])],
         "methods": list(METHODS),
     }
     with open(f"{OUT}/meta_{tag}.json", "w") as fh:
