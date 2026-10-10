@@ -11,6 +11,15 @@ Stage edges are read from `meta_r2p7.json`. `pip_freeze.txt` records the
 exact package versions of the run. `paper_results/revision/` holds the
 earlier pre-fix predictions and is kept only for the record.
 
-Known issue: in `v5.csv` the `mondrian_stage` / `mondrian_both` rows for
-random stratum 4 show marginal coverage near 0.44, unlike every other cell;
-the manuscript uses only the split-conformal rows of that file.
+`v5.csv` (prevalence-matched random strata) holds split and class-Mondrian
+rows only. The batch run also wrote stage-Mondrian and class x stage rows,
+which were invalid by construction: their calibration groups were wear
+stages while their test groups were random strata, so a stage threshold
+was applied to an unrelated group (marginal coverage near 0.44 in stratum
+4 was the symptom). `notebooks/validate_wear.py` now restricts that
+experiment to methods whose calibration and test groups share one grouping
+(`_report(methods=...)`), and those rows were removed from the file. No
+manuscript result used them.
+
+The artifact index in the top-level `README.md` maps each table, figure
+and in-text result to its file here, its manifest column and seed.

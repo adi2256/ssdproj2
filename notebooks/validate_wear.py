@@ -129,8 +129,18 @@ def _fit_predict(raw, seed, model="rf"):
     return proba(X["cal"]), proba(X["test"])
 
 
-def _report(p_cal, y_cal, p_te, y_te, g_cal, g_te, alpha=ALPHA, seed=0):
-    """All four conformal conditions, reported per group."""
+def _report(p_cal, y_cal, p_te, y_te, g_cal, g_te, alpha=ALPHA, seed=0,
+            methods=("split", "mondrian_class", "mondrian_stage",
+                     "mondrian_both")):
+    """
+    Conformal conditions, reported per group.
+
+    The group-conditional methods (mondrian_stage, mondrian_both) are only
+    meaningful when g_cal and g_te use the same grouping. Callers that
+    report on a different test grouping (V5 reports on random strata while
+    calibration groups are wear stages) must restrict `methods` to the
+    group-free ones.
+    """
     conds = {
         "split": (SplitConformal(alpha=alpha, seed=seed)
                   .fit(p_cal, y_cal), None),
@@ -146,6 +156,8 @@ def _report(p_cal, y_cal, p_te, y_te, g_cal, g_te, alpha=ALPHA, seed=0):
     }
     rows = []
     for name, (cp, grp) in conds.items():
+        if name not in methods:
+            continue
         r = cp.predict(p_te, groups=grp) if grp is not None else cp.predict(p_te)
         per = group_conditional_coverage(r, y_te, g_te)
         for s, d in per.items():
@@ -445,8 +457,13 @@ def v5_prevalence_confound(labelled, seed=42):
         g_rand[np.array(take, dtype=int)] = s
 
     keep = g_rand >= 0
+    # Only group-free methods: calibration groups are wear stages, test
+    # groups are random strata, so stage-conditional thresholds would be
+    # applied to the wrong windows. (Earlier runs reported all four; the
+    # two Mondrian-by-stage rows of that output are invalid by construction.)
     rep = _report(p_cal, raw["cal"].y, p_te[keep], y_te[keep],
-                  g_cal, g_rand[keep], seed=seed)
+                  g_cal, g_rand[keep], seed=seed,
+                  methods=("split", "mondrian_class"))
     sp_rows = rep.filter(pl.col("method") == "split").sort("stage")
     print("\n  RANDOM strata matched on prevalence (no age structure):")
     print(sp_rows.select(["stage", "n", "prevalence", "coverage",

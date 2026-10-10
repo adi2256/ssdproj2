@@ -1,47 +1,47 @@
 # SSD Failure Prediction under Manufacturer Distribution Shift
 
-Conformal prediction sets with per-drive coverage guarantees for SSD
-failure prediction, evaluated under leave-one-manufacturer-out (LOMO)
-distribution shift on the Alibaba production SSD SMART dataset.
+Conformal prediction sets for SSD failure prediction on the Alibaba
+production SMART dataset, audited by wear stage and stress-tested by
+holding out a manufacturer.
 
-**Status:** pipeline complete and tested (321 tests). Diagnosing why
-models fail to transfer across manufacturers before the final run.
+**Status (October 2026):** experiments finished; manuscript under
+revision for a Springer LNCS/LNEE conference. All reported numbers come
+from one batch run (`notebooks/revision_batch.py`, seed 42, deterministic
+drive sampler) whose outputs are in `paper_results/final/`. Test suite:
+357 passed, 5 skipped.
 
 ---
 
-## What this is
+## What this is, and what is claimed
 
-Existing SSD failure predictors output a score. That score has no
-defined meaning, is never checked for calibration, and comes with only
-fleet-level accuracy figures — nothing about any individual drive.
+Existing SSD failure predictors output a score with no defined
+probability meaning and are evaluated only by fleet-level metrics. This
+project wraps such a classifier in split and Mondrian conformal
+prediction and measures where the resulting coverage holds and where it
+does not.
 
-This project replaces the score with a **prediction set** carrying a
-formal, distribution-free, finite-sample coverage guarantee, then asks
-whether that guarantee survives the situation it actually meets in
-production: a manufacturer the system has never seen.
-
-**Not claimed:** better accuracy, novel sequence modelling, or that
-conformal prediction is new to storage (Vishwakarma et al., COPA 2023,
-applied Mondrian conformal to disk health).
-
-**Claimed:** a measurement of what happens to conformal validity under
-manufacturer shift, and of whether shift-robust variants repair it.
+| | |
+|---|---|
+| **Guaranteed** | Split conformal's marginal coverage holds for an exchangeable unit. Here that unit is the **drive**, so the guarantee applies to one-window-per-drive protocols (`notebooks/drive_level_check.py`). |
+| **Measured, not guaranteed** | Coverage over windows, per wear stage, per vendor and on a held-out vendor. These are empirical estimates with drive-clustered bootstrap intervals. |
+| **Claimed** | Marginal coverage is met while failure-class coverage collapses on the oldest wear stage; class x stage Mondrian conformal repairs this on the same fleet; under a held-out vendor no tested representation gives a classifier that transfers. |
+| **Not claimed** | Better accuracy than WEFR; novel sequence modelling; that conformal prediction is new to storage (Vishwakarma et al., COPA 2023); any guarantee for an unseen vendor; any population claim from three vendors (they are three case studies). |
 
 ---
 
 ## Setup
 
 ```bash
-git clone <this repo>
-cd SSD-Failure-Prediction
+git clone https://github.com/adi2256/ssdproj2
+cd ssdproj2
 pip install -r requirements.txt
-python3 -m pytest -q            # 321 passed
+python3 -m pytest -q            # 357 passed, 5 skipped
 ```
 
-No data is required. Every module is developed and tested against
-`src/data/synthetic.py`, a 400-drive fixture calibrated to the real
-fleet's vendor proportions, failure-rate ordering, censoring rate and
-per-vendor attribute availability.
+Unit tests need no data: every module is tested against
+`src/data/synthetic.py`, a fixture with known ground truth calibrated to
+the real fleet's vendor proportions, failure-rate ordering, censoring rate
+and per-vendor attribute availability.
 
 ---
 
@@ -49,27 +49,109 @@ per-vendor attribute availability.
 
 ```
 src/
-  config.py            every tunable number; nothing hardcodes settings
+  config.py            every tunable number
   schema.py            105 columns, per-vendor availability, COMMON_IDS
-  data/
-    synthetic.py       fixture generator with known ground truth
-    labels.py          0 < days_to_failure <= 30, censoring rules
-    splits.py          standard + LOMO folds, leakage assertions
-    windowing.py       trajectory tensors, z-score / rank scaling
+  data/                synthetic fixture, labels, splits, windowing
   features/wefr.py     ensemble ranking (Xu et al., DSN 2021)
   models/              Random Forest baseline, GRU sequence model
   conformal/           split, Mondrian (class/group), weighted
   evaluation/          metrics, LOMO orchestration
-
-scripts/               entry points; run in numeric order
-tests/                 321 tests
-notebooks/             Kaggle setup helpers
-reports/               provenance: profiling and diagnostics output
+scripts/               preprocessing entry points, run in numeric order
+notebooks/             Kaggle batch runs, table generation, audits
+paper/                 LaTeX table/figure helpers, number audit
+paper_results/final/   released results, predictions and manifests
+reports/               profiling and diagnostics output
+tests/
 ```
 
 ---
 
-## Data
+## Reproducing the paper
+
+### Regenerating tables and figures
+
+```bash
+# every table, figure and \R{...} number macro of the manuscript
+python -m notebooks.paper_tables paper_results/final OUT_DIR
+
+# coverage at the exchangeable unit (one window per drive, 200 draws)
+python -m notebooks.drive_level_check paper_results/final
+
+# trace every number in the built PDF back to a released file
+python3 -I paper/number_audit.py paper.pdf paper_results/final OUT_DIR reports
+```
+
+These need only the files in `paper_results/final/`; no access to the raw
+dataset is required.
+
+### Full rerun
+
+`notebooks/revision_batch.py` regenerates `paper_results/final/` from the
+public dataset (Kaggle CPU, background "Save Version" run; see
+`notebooks/kaggle_setup.py`). Every step uses the 60,000-drive seed-42
+sample (`r2p7`) unless stated. The sampler sorts the drive list by
+`(model, disk_id)` before `DataFrame.sample(seed)` and prints a SHA1
+fingerprint of the sampled keys; downstream ordering (drive table, split
+assignment, window construction, training-window cap, Random Forest) is
+seeded. `notebooks/export_manifests.py` writes the manifests below.
+
+### Artifact index
+
+Status: **P** = recomputed from the released per-window predictions alone,
+with the released scripts. **R** = a released result file; regenerating it
+needs a full rerun. Full reruns have been checked at the level of samples
+and split assignments (fingerprints, manifests, cross-session comparison,
+consistency with the released predictions), not re-executed end to end
+and compared number by number.
+
+Paths are relative to `paper_results/final/`; manifests are in
+`manifests/`.
+
+| Paper result | Released file(s) | Manifest (file: column) | Seed | Status |
+|---|---|---|---|---|
+| Table 2 (main, by wear stage), Table 3 (set composition), Fig. 4 (coverage vs set size) | `preds_r2p7_{cal,test}.parquet`, `meta_r2p7.json` (stage edges), `boot_pooled.csv` | `drives_r2p7.csv.gz`: `part_standard`; `drive_index_r2p7_{cal,test}.csv.gz` | 42 | P |
+| Table 4 (sampling ratio) | `preds_{r1,r2p7,r5}_{cal,test}.parquet`, `ratio_summary.csv` | `drives_{r1,r2p7,r5}.csv.gz`: `part_standard`; `drive_index_*` | 42 | P |
+| Table 5 (vendor x stage failure coverage) | `preds_r2p7_{cal,test}.parquet` | as Table 2 | 42 | P |
+| Table 6, Fig. 3 (within-vendor audit) | `preds_wv{A,B,C}_{cal,test}.parquet`, `meta_wv.json`, `boot_wv.csv` | `drives_r2p7.csv.gz`: `part_within_vendor`; `drive_index_wv*` | 42 | P |
+| Within-model audit (Sect. 5.3) | `preds_wm{MA1..MC2}_{cal,test}.parquet`, `meta_wm.json` | `drives_r2p7.csv.gz`: `part_within_model` (no drive-index map) | 42 | P |
+| Table 7 (recalibration) | `preds_r2p7_{train,cal,test}.parquet`, `platt_*_r2p7.csv` | as Table 2 | 42 | P |
+| Drive-level coverage (Sect. 5.1) | `preds_r2p7_{cal,test}.parquet` | as Table 2 | 42 (draws) | P |
+| Fig. 2 (power-on hours by vendor) | `age_overlap.csv` | `drives_r2p7.csv.gz`: `part_standard` | 42 | R |
+| Ten-seed spread (Sect. 5.2) | `seeds.csv` | `drives_seed{0..8}.csv.gz`, `drives_r2p7.csv.gz`: `part_standard` | 0-8, 42 | R |
+| Wear-stage hold-out (Sect. 5.2) | `v3.csv` | `drives_r2p7.csv.gz`: `modal_stage`, `part_holdout_stage_{0..4}` | 42 | R |
+| Stage binning (Sect. 5.2) | `v2.csv` | `drives_r2p7.csv.gz`: `part_standard` | 42 | R |
+| Classifier swap, GBM / logistic (Sect. 5.2) | `v6.csv` | `drives_r2p7.csv.gz`: `part_standard` | 42 | R |
+| Prevalence-matched random strata (Sect. 5.2) | `v5.csv` | `drives_r2p7.csv.gz`: `part_standard`; strata drawn from the seed, not listed | 42 | R |
+| Held-out-vendor conformal (Sect. 5.5) | `shift_rank.csv`, `shift_cells/` | `drives_r2p7.csv.gz`: `part_holdout_vendor_{A,B,C}` | 42 | R |
+| Representation sweep (Sect. 5.5) | `repr_sweep.csv`, `lomm_sweep.csv` | `drives_r2p7.csv.gz` | 42 | R |
+| Transfer diagnostics (Sect. 5.5) | `manifests/transfer_diagnostics.csv`, `manifests/transfer_sign_bootstrap.csv` | `drives_r2p7.csv.gz` | 42 | R |
+| Dataset size, vendor profile (Sect. 3) | `reports/vendor_profile.csv` (repo root) | full dataset | - | R |
+
+Table and figure numbers refer to the Springer manuscript. Run
+configurations (stride, training-window cap, trees, normalisation,
+features, alpha) are in `manifests/experiments.json`; per-sample sizes,
+labelling counts and fingerprints in `manifests/samples.json`.
+`pip_freeze.txt` records package versions of the batch run.
+
+### Known limitations of the release
+
+* The within-model prediction files have split assignments but no
+  drive-index map, so they are outside `manifests/consistency_check.csv`.
+* The training-window subsample, the random strata of the prevalence
+  control and the bootstrap draws are not listed; they are derived from
+  the recorded seed by the released code.
+* `v5.csv` reports only split and class-Mondrian rows. An earlier version
+  also had stage-Mondrian rows that were invalid by construction
+  (calibrated on wear stages, applied to random strata); the code is
+  fixed (`notebooks/validate_wear.py`, `_report(methods=...)`) and those
+  rows were removed. No paper result used them.
+* `paper_results/revision/` holds pre-fix predictions from the earlier,
+  non-deterministic sampler and is kept only for the record.
+
+---
+
+## Data preparation
+
 
 **Alibaba SSD SMART logs**, the dataset released with the base paper.
 https://github.com/alibaba-edu/dcbrain/tree/master/ssd_smart_logs
@@ -120,35 +202,6 @@ This is a locked decision and a reportable finding.
 
 ---
 
-## Running experiments
-
-```python
-from src.data.labels import build_labels
-from src.evaluation import RunConfig, run_experiment, coverage_gap_table
-
-labelled, stats = build_labels(df)
-
-cfg = RunConfig(
-    stride=30,
-    normalize="rank",                    # or "zscore"
-    drop_constant_test_features=True,
-    models=("random_forest", "gru"),
-    methods=("split", "mondrian_class", "mondrian_group", "weighted"),
-    results_dir="results",
-)
-res = run_experiment(labelled, cfg, verbose=True)
-print(coverage_gap_table(res))
-```
-
-`run_experiment` writes one JSON per (fold, model, method) and skips
-completed cells, so a run cut short by a session timeout resumes rather
-than restarts.
-
-On Kaggle, `notebooks/kaggle_setup.py` handles data location, upload
-verification, and a stale-module check.
-
----
-
 ## Invariants the code enforces
 
 These are asserted, not remembered.
@@ -167,18 +220,18 @@ These are asserted, not remembered.
 
 ## Reporting rules
 
-1. **Set size and singleton rate in every table.** A guarantee can be
-   met by widening sets until they carry no information; coverage alone
-   hides this entirely.
-2. **Class-conditional coverage alongside marginal.** At 1.4%
-   prevalence, marginal coverage is dominated by healthy drives —
-   measured 0.896 marginal against 0.049 failure-class coverage on the
-   standard split.
-3. **Failed-drive counts, not positive-window counts.** Thirty windows
-   from one drive are thirty views of the same failure; window counts
-   overstate statistical power by roughly 30x.
-4. **Per-fold results are three case studies, not a population
-   estimate.** n=3 cannot support a distributional claim.
+1. **Set size and singleton rate in every table.** A coverage target can
+   be met by widening sets until they carry no information.
+2. **Class-conditional coverage alongside marginal.** At roughly 1.5%
+   window prevalence, marginal coverage is dominated by healthy windows
+   and can be met while almost every failure is missed.
+3. **Failed-drive counts, not positive-window counts.** Windows from one
+   drive are dependent; window counts overstate statistical power.
+4. **Per-vendor results are three case studies, not a population
+   estimate.**
+5. **Window-level coverage is empirical.** The finite-sample guarantee
+   is for the drive; report drive-level checks beside window-level
+   numbers.
 
 ---
 
