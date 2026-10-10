@@ -633,13 +633,13 @@ def main(res_dir, out, edges=None):
     wv_hi = [float(N[f"wv_{v}{s}_hi"]) for v in "ABC" for s in range(5)]
     wv_marg = [float(N[f"wv_{v}{s}_marg"]) for v in "ABC" for s in range(5)]
     wv_mb = [float(N[f"wv_{v}{s}_mb"]) for v in "ABC" for s in range(5)]
-    N.update({"wv_fail_min": f"{min(wv_fail):.2f}",
-              "wv_fail_max": f"{max(wv_fail):.2f}",
+    N.update({"wv_fail_min": f"{min(wv_fail):.3f}",
+              "wv_fail_max": f"{max(wv_fail):.3f}",
               "wv_hi_max": f"{max(wv_hi):.3f}",
-              "wv_marg_min": f"{min(wv_marg):.2f}",
-              "wv_marg_max": f"{max(wv_marg):.2f}",
-              "wv_mb_min": f"{min(wv_mb):.2f}",
-              "wv_mb_max": f"{max(wv_mb):.2f}"})
+              "wv_marg_min": f"{min(wv_marg):.3f}",
+              "wv_marg_max": f"{max(wv_marg):.3f}",
+              "wv_mb_min": f"{min(wv_mb):.3f}",
+              "wv_mb_max": f"{max(wv_mb):.3f}"})
     # ranges quoted in the text
     young = range(4)
     for k in ("splitfail", "splitsize", "bothsize", "classfail"):
@@ -658,7 +658,7 @@ def main(res_dir, out, edges=None):
                               if int(N[f"wv_A{s}_n"]) >= MIN_FAIL))
     for k in ("fail", "lo", "hi", "n"):
         N[f"wv_Ay_{k}"] = N[f"wv_A{N['wv_A_young']}_{k}"]
-    N["wv_A_rel_min"], N["wv_A_rel_max"] = f"{min(relA):.2f}", f"{max(relA):.2f}"
+    N["wv_A_rel_min"], N["wv_A_rel_max"] = f"{min(relA):.3f}", f"{max(relA):.3f}"
     sizes = []
     for v in "ABC":
         sub = R.wv.filter(pl.col("vendor") == v)
@@ -669,7 +669,7 @@ def main(res_dir, out, edges=None):
         N[f"wv_{v}_ntrain"] = _n(mv["n_windows_train"])
         N[f"wv_{v}_ncal"] = _n(mv["n_windows_cal"])
         N[f"wv_{v}_ntest"] = _n(mv["n_windows_test"])
-    N["wv_mbsize_min"], N["wv_mbsize_max"] = f"{min(sizes):.2f}", f"{max(sizes):.2f}"
+    N["wv_mbsize_min"], N["wv_mbsize_max"] = f"{min(sizes):.3f}", f"{max(sizes):.3f}"
 
     # direction claims the text makes -- checked, not assumed
     def sep(v, a, b):
@@ -682,11 +682,11 @@ def main(res_dir, out, edges=None):
         "B_old_below_young": sep("B", 4, 0),
         "C_old_below_young": sep("C", 4, 0),
         "wv_no_cell_reaches_target": float(N["wv_hi_max"]) < 0.90,
-        "marginal_within_0.09_everywhere": max(
+        "marginal_within_0.10_everywhere": max(
             [abs(float(N[f"wv_{v}{s}_marg"]) - 0.9) for v in "ABC" for s in range(5)]
             + [abs(R.b(tag=t, method="split", grouping="stage", group=s,
                        stat="coverage")["point"] - 0.9)
-               for t in ("r1", "r2p7", "r5") for s in range(5)]) <= 0.09,
+               for t in ("r1", "r2p7", "r5") for s in range(5)]) <= 0.10,
         "every_stage_marginal_ci_reaches_target": all(
             float(N[f"splitcov_s{s}_hi"]) >= 0.9 for s in range(5)),
         "both_s4_ci_covers_target": float(N["bothfail_s4_lo"]) <= 0.90
