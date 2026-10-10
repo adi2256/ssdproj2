@@ -374,47 +374,69 @@ def _experiment_config():
     }
 
 
-def run(load_slim, rel_dir: str = REL):
+def _bundle():
+    zp = f"{OUT}/manifests.zip"
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(os.listdir(MAN)):
+            z.write(f"{MAN}/{f}", arcname=f"manifests/{f}")
+    return zp
+
+
+def run(load_slim, rel_dir: str = REL, tags=None, extras: bool = True):
+    """
+    tags   : sample tags to process (default: all, largest sample first).
+    extras : also window the whole 60k sample for the stage hold-out
+             manifest and the transfer diagnostics (the slow part).
+
+    Everything is written as soon as it exists -- samples.json,
+    regeneration_check.csv and manifests.zip are refreshed after every
+    sample -- so a run that stops early still leaves usable output.
+    """
     t0 = time.time()
     os.makedirs(MAN, exist_ok=True)
     infos, checks = [], []
+    order = sorted(SAMPLES, key=lambda s: -s[1] if s[0] in ("r1", "r2p7", "r5")
+                   else 0)
+    order = [s for s in order if s[0] in ("r5", "r2p7", "r1")] + \
+            [s for s in order if s[0] not in ("r5", "r2p7", "r1")]
+    if tags is not None:
+        order = [s for s in order if s[0] in tags]
+    with open(f"{MAN}/experiments.json", "w") as fh:
+        json.dump(_experiment_config(), fh, indent=2)
 
-    for tag, n, seed in SAMPLES:
+    for tag, n, seed in order:
         labelled, man, info = sample_manifest(load_slim, tag, n, seed)
         if tag == "r2p7":
-            from notebooks.paper_results import STRIDE
-            from src.data.windowing import make_windows
             man = main_extra_splits(labelled, man)
-            ws = make_windows(labelled, stride=STRIDE)
-            man, edges = stage_holdout_manifest(ws, man)
-            info["holdout_stage_edges"] = edges
-            diag, sign = transfer_diagnostics(labelled, ws)
-            diag.write_csv(f"{MAN}/transfer_diagnostics.csv")
-            sign.write_csv(f"{MAN}/transfer_sign_bootstrap.csv")
-            with pl.Config(tbl_rows=40, tbl_cols=12):
-                print(diag)
-                print(sign)
-            del ws
-            gc.collect()
+            if extras:
+                from notebooks.paper_results import STRIDE
+                from src.data.windowing import make_windows
+                ws = make_windows(labelled, stride=STRIDE)
+                man, edges = stage_holdout_manifest(ws, man)
+                info["holdout_stage_edges"] = edges
+                diag, sign = transfer_diagnostics(labelled, ws)
+                diag.write_csv(f"{MAN}/transfer_diagnostics.csv")
+                sign.write_csv(f"{MAN}/transfer_sign_bootstrap.csv")
+                with pl.Config(tbl_rows=40, tbl_cols=12):
+                    print(diag)
+                    print(sign)
+                del ws
+                gc.collect()
             checks += verify_within_vendor(labelled, rel_dir)
         if tag in ("r1", "r2p7", "r5"):
             checks += verify_dumps(labelled, tag, seed, rel_dir)
         man.write_csv(f"{MAN}/drives_{tag}.csv")
         infos.append(info)
+        with open(f"{MAN}/samples.json", "w") as fh:
+            json.dump(infos, fh, indent=2)
+        if checks:
+            pl.DataFrame(checks).write_csv(f"{MAN}/regeneration_check.csv")
+        _bundle()
         print(f"  [{tag}] done at {time.time() - t0:.0f}s", flush=True)
         del labelled, man
         gc.collect()
 
-    with open(f"{MAN}/samples.json", "w") as fh:
-        json.dump(infos, fh, indent=2)
-    with open(f"{MAN}/experiments.json", "w") as fh:
-        json.dump(_experiment_config(), fh, indent=2)
-    pl.DataFrame(checks).write_csv(f"{MAN}/regeneration_check.csv")
-
-    zp = f"{OUT}/manifests.zip"
-    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(os.listdir(MAN)):
-            z.write(f"{MAN}/{f}", arcname=f"manifests/{f}")
+    zp = _bundle()
     bad = [c for c in checks if c.get("status") != "match"]
     print(f"\nregeneration check: {len(checks) - len(bad)}/{len(checks)} match")
     for c in bad:
