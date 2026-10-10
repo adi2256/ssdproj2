@@ -1,0 +1,27 @@
+{
+  "tag": "r1",
+  "n_drives": 32610,
+  "n_failed_drives": 16305,
+  "n_healthy_drives": 16305,
+  "healthy_to_failed": 1.0,
+  "seed": 42,
+  "alpha": 0.1,
+  "n_windows_train": 200000,
+  "n_windows_cal": 77993,
+  "n_windows_test": 97268,
+  "n_fail_windows_test": 2872,
+  "test_prevalence": 0.029526668585763048,
+  "auc": 0.6770182208749934,
+  "stage_edges": [
+    6527.0,
+    10600.600000000006,
+    15381.0,
+    25200.20000000001
+  ],
+  "methods": [
+    "split",
+    "mondrian_class",
+    "mondrian_stage",
+    "mondrian_both"
+  ]
+}

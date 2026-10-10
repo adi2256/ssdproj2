@@ -1,0 +1,78 @@
+{
+  "seed": 42,
+  "alpha": 0.1,
+  "models": {
+    "MA1": {
+      "auc": 0.711429877119935,
+      "stage_edges": [
+        34246.0,
+        37788.0,
+        40759.0,
+        44495.0
+      ],
+      "n_windows_cal": 8067,
+      "n_windows_test": 10007,
+      "n_fail_windows_test": 160
+    },
+    "MA2": {
+      "auc": 0.6390674155367849,
+      "stage_edges": [
+        24990.0,
+        29401.0,
+        33015.0,
+        36590.0
+      ],
+      "n_windows_cal": 34672,
+      "n_windows_test": 43580,
+      "n_fail_windows_test": 143
+    },
+    "MB1": {
+      "auc": 0.7519809022065596,
+      "stage_edges": [
+        6543.800000000001,
+        9405.0,
+        12610.0,
+        16560.0
+      ],
+      "n_windows_cal": 15367,
+      "n_windows_test": 19067,
+      "n_fail_windows_test": 323
+    },
+    "MB2": {
+      "auc": 0.5445993269772259,
+      "stage_edges": [
+        15288.800000000001,
+        18575.0,
+        21949.0,
+        25446.0
+      ],
+      "n_windows_cal": 15993,
+      "n_windows_test": 20018,
+      "n_fail_windows_test": 102
+    },
+    "MC1": {
+      "auc": 0.655663936340044,
+      "stage_edges": [
+        5174.0,
+        8228.0,
+        11313.0,
+        14892.0
+      ],
+      "n_windows_cal": 75147,
+      "n_windows_test": 94455,
+      "n_fail_windows_test": 1935
+    },
+    "MC2": {
+      "auc": 0.5936970983627282,
+      "stage_edges": [
+        2426.0,
+        4672.0,
+        7125.000000000002,
+        9678.0
+      ],
+      "n_windows_cal": 5876,
+      "n_windows_test": 7262,
+      "n_fail_windows_test": 189
+    }
+  }
+}

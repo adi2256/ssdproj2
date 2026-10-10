@@ -1,0 +1,46 @@
+{
+  "n_drives": 60000,
+  "seed": 42,
+  "alpha": 0.1,
+  "vendors": {
+    "A": {
+      "auc": 0.6587479013451225,
+      "stage_edges": [
+        26009.0,
+        31069.0,
+        34571.0,
+        38784.0
+      ],
+      "n_windows_train": 170631,
+      "n_windows_cal": 42348,
+      "n_windows_test": 53551,
+      "n_fail_windows_test": 303
+    },
+    "B": {
+      "auc": 0.6756952282627818,
+      "stage_edges": [
+        9407.0,
+        14082.0,
+        17786.0,
+        22155.0
+      ],
+      "n_windows_train": 125272,
+      "n_windows_cal": 31258,
+      "n_windows_test": 39065,
+      "n_fail_windows_test": 429
+    },
+    "C": {
+      "auc": 0.6595154191354342,
+      "stage_edges": [
+        4983.800000000003,
+        7956.0,
+        10977.0,
+        14641.0
+      ],
+      "n_windows_train": 200000,
+      "n_windows_cal": 81093,
+      "n_windows_test": 101786,
+      "n_fail_windows_test": 2127
+    }
+  }
+}
