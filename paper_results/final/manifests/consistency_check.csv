@@ -1,0 +1,13 @@
+dump,part,windows,drives,same_drives,in_split,positives_on_failed,vendor_ok
+r1,cal,77993,5026,true,true,true,true
+r1,test,97268,6285,true,true,true,true
+r2p7,cal,155176,9253,true,true,true,true
+r2p7,test,194338,11559,true,true,true,true
+r5,cal,261390,15090,true,true,true,true
+r5,test,327386,18860,true,true,true,true
+wvA,cal,42348,2534,true,true,true,true
+wvA,test,53551,3165,true,true,true,true
+wvB,cal,31258,1756,true,true,true,true
+wvB,test,39065,2195,true,true,true,true
+wvC,cal,81093,4960,true,true,true,true
+wvC,test,101786,6201,true,true,true,true

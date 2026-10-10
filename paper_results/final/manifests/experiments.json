@@ -1,0 +1,67 @@
+{
+  "dataset": "Alibaba SSD SMART (dcbrain ssd_smart_logs), 2018-2019",
+  "sampler": "all failed drives + healthy drives sampled uniformly without replacement from the (model, disk_id)-sorted list with polars DataFrame.sample(seed)",
+  "labels": {
+    "horizon_days": 30
+  },
+  "main_tables": {
+    "stride": 30,
+    "max_train_windows": 200000,
+    "n_trees": 100,
+    "normalize": "per_drive",
+    "features": "dynamics",
+    "n_stages": 5,
+    "alpha": 0.1,
+    "alphas_swept": [
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.3
+    ],
+    "bootstrap_resamples": 1000,
+    "seed": 42
+  },
+  "within_vendor_and_model": {
+    "stride": 30,
+    "max_train_windows": 200000,
+    "n_trees": 100,
+    "normalize": "per_drive",
+    "features": "dynamics",
+    "seed": 42
+  },
+  "robustness": {
+    "stride": 30,
+    "seed": 42
+  },
+  "representation_sweep": {
+    "stride": 60,
+    "max_train_windows": 150000,
+    "n_trees": 60,
+    "seed": 42
+  },
+  "held_out_vendor_conformal": {
+    "stride": 30,
+    "features": "last",
+    "normalize": "rank",
+    "feature_selection": "WEFR, per fold",
+    "methods": [
+      "split",
+      "mondrian_class",
+      "weighted"
+    ],
+    "seed": 42
+  },
+  "seed_analysis": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    42
+  ]
+}
