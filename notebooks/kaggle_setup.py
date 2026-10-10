@@ -129,10 +129,18 @@ def make_loader(slim_glob: str) -> Callable:
         keep_all_failed retains every one of the 16,305 failed drives
         and thins only healthy ones. An earlier run used a 20,000-drive
         proportional sample, which left about 95 failed drives in each
-        LOMO test fold; windows from one drive are 30 overlapping views
-        of the same failure, so the effective sample size was the drive
-        count, not the window count, and every held-out fold came out at
-        AUC 0.50.
+        LOMO test fold; windows from one drive share its history, so the
+        effective sample size was the drive count, not the window count,
+        and every held-out fold came out at AUC 0.50.
+
+        DETERMINISM. The drive list is sorted by (model, disk_id) before
+        sampling, so (n_drives, seed) identifies the sample exactly across
+        sessions; the printed fingerprint lets two runs be compared.
+        Downstream steps are deterministic too: drive_table() sorts drives,
+        splits permute that sorted table with a seeded generator, windows
+        are built in sorted (drive, date) order, and the training-window cap
+        and the forest use the same seed. notebooks/export_manifests.py
+        writes the resulting drive lists and split assignments.
         """
         n_drives = n_drives if n_drives is not None else CFG.subset_n_drives
         keep_all_failed = (keep_all_failed if keep_all_failed is not None
