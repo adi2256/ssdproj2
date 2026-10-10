@@ -360,13 +360,35 @@ def _experiment_config():
                                     "n_trees": WV.N_TREES,
                                     "normalize": WV.NORMALIZE,
                                     "features": WV.FLATTEN, "seed": WV.SEED},
-        "robustness": {"stride": VW.STRIDE, "seed": SEED},
+        "robustness": {
+            "stride": VW.STRIDE, "max_train_windows": VW.MAX_TRAIN,
+            "n_trees": VW.N_TREES, "seed": SEED, "alpha": 0.10,
+            "stage_holdout": "modal power-on-hour stage per drive; held-out "
+                             "stage = test, rest split 80/20 train/cal with "
+                             "default_rng(seed).shuffle (see drives_r2p7)",
+            "binning": ["quantile_3", "quantile_5", "quantile_8",
+                        "changepoint_3", "changepoint_5"],
+            "classifiers": {"rf": "as main tables",
+                            "gbm": "HistGradientBoosting, defaults, "
+                                   "balanced class weights",
+                            "logreg": "L2, C=1, lbfgs, 1000 iter, "
+                                      "standardised inputs"},
+            "prevalence_strata": "5 random drive strata matched to stage "
+                                 "prevalences, default_rng(seed)",
+            "training_window_cap": "positives kept, negatives sampled "
+                                   "with default_rng(seed).choice"},
         "representation_sweep": {"stride": FR.STRIDE,
                                  "max_train_windows": FR.MAX_TRAIN,
                                  "n_trees": FR.N_TREES, "seed": FR.SEED},
         "held_out_vendor_conformal": {"stride": 30, "features": "last",
                                       "normalize": "rank",
                                       "feature_selection": "WEFR, per fold",
+                                      "model": "random forest, 200 trees",
+                                      "training_windows": "uncapped",
+                                      "alpha": 0.10,
+                                      "weighted_cp": "logistic domain "
+                                      "classifier, weights clipped to "
+                                      "[0.05, 20]",
                                       "methods": ["split", "mondrian_class",
                                                   "weighted"], "seed": SEED},
         "seed_analysis": [s for t, _, s in SAMPLES if t.startswith("seed")]

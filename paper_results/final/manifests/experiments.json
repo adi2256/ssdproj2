@@ -32,7 +32,25 @@
   },
   "robustness": {
     "stride": 30,
-    "seed": 42
+    "max_train_windows": 200000,
+    "n_trees": 100,
+    "seed": 42,
+    "alpha": 0.1,
+    "stage_holdout": "modal power-on-hour stage per drive; held-out stage = test, rest split 80/20 train/cal with default_rng(seed).shuffle (see drives_r2p7)",
+    "binning": [
+      "quantile_3",
+      "quantile_5",
+      "quantile_8",
+      "changepoint_3",
+      "changepoint_5"
+    ],
+    "classifiers": {
+      "rf": "as main tables",
+      "gbm": "HistGradientBoosting, defaults, balanced class weights",
+      "logreg": "L2, C=1, lbfgs, 1000 iter, standardised inputs"
+    },
+    "prevalence_strata": "5 random drive strata matched to stage prevalences, default_rng(seed)",
+    "training_window_cap": "positives kept, negatives sampled with default_rng(seed).choice"
   },
   "representation_sweep": {
     "stride": 60,
@@ -45,6 +63,10 @@
     "features": "last",
     "normalize": "rank",
     "feature_selection": "WEFR, per fold",
+    "model": "random forest, 200 trees",
+    "training_windows": "uncapped",
+    "alpha": 0.1,
+    "weighted_cp": "logistic domain classifier, weights clipped to [0.05, 20]",
     "methods": [
       "split",
       "mondrian_class",
